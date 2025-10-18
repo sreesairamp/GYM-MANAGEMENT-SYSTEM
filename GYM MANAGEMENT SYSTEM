@@ -1,0 +1,1130 @@
+<?php
+// Database connection
+$servername = "localhost";
+$username = "root";
+$password = "";
+$dbname = "gym_db";
+
+// Create connection
+$conn = new mysqli($servername, $username, $password, $dbname);
+
+// Check connection
+if ($conn->connect_error) {
+    die("Connection failed: " . $conn->connect_error);
+}
+
+// Handle form submissions
+if ($_SERVER["REQUEST_METHOD"] == "POST") {
+    // Add new member
+    if (isset($_POST['add_member'])) {
+        $name = $_POST['name'];
+        $email = $_POST['email'];
+        $phone = $_POST['phone'];
+        $gender = $_POST['gender'];
+        $membership_id = $_POST['membership_id'];
+        $join_date = date('Y-m-d');
+        
+        $sql = "INSERT INTO Members (name, email, phone, gender, join_date, membership_id) 
+                VALUES ('$name', '$email', '$phone', '$gender', '$join_date', $membership_id)";
+        
+        if ($conn->query($sql) === TRUE) {
+            $success_message = "New member added successfully";
+        } else {
+            $error_message = "Error: " . $sql . "<br>" . $conn->error;
+        }
+    }
+    
+    // Add new trainer
+    if (isset($_POST['add_trainer'])) {
+        $name = $_POST['trainer_name'];
+        $specialization = $_POST['specialization'];
+        $phone = $_POST['trainer_phone'];
+        
+        $sql = "INSERT INTO Trainers (name, specialization, phone) 
+                VALUES ('$name', '$specialization', '$phone')";
+        
+        if ($conn->query($sql) === TRUE) {
+            $success_message = "New trainer added successfully";
+        } else {
+            $error_message = "Error: " . $sql . "<br>" . $conn->error;
+        }
+    }
+    
+    // Record attendance
+    if (isset($_POST['record_attendance'])) {
+        $member_id = $_POST['attendance_member_id'];
+        $status = $_POST['status'];
+        $date = date('Y-m-d');
+        
+        $sql = "INSERT INTO Attendance (member_id, date, status) 
+                VALUES ($member_id, '$date', '$status')";
+        
+        if ($conn->query($sql) === TRUE) {
+            $success_message = "Attendance recorded successfully";
+        } else {
+            $error_message = "Error: " . $sql . "<br>" . $conn->error;
+        }
+    }
+    
+    // Record payment
+    if (isset($_POST['record_payment'])) {
+        $member_id = $_POST['payment_member_id'];
+        $membership_id = $_POST['payment_membership_id'];
+        $amount = $_POST['amount'];
+        $payment_date = date('Y-m-d');
+        
+        $sql = "INSERT INTO Payments (member_id, membership_id, amount, payment_date) 
+                VALUES ($member_id, $membership_id, $amount, '$payment_date')";
+        
+        if ($conn->query($sql) === TRUE) {
+            $success_message = "Payment recorded successfully";
+        } else {
+            $error_message = "Error: " . $sql . "<br>" . $conn->error;
+        }
+    }
+    
+    // Assign trainer to member
+    if (isset($_POST['assign_trainer'])) {
+        $member_id = $_POST['assign_member_id'];
+        $trainer_id = $_POST['assign_trainer_id'];
+        $assigned_date = date('Y-m-d');
+        
+        $sql = "INSERT INTO Member_Trainer (member_id, trainer_id, assigned_date) 
+                VALUES ($member_id, $trainer_id, '$assigned_date')";
+        
+        if ($conn->query($sql) === TRUE) {
+            $success_message = "Trainer assigned successfully";
+        } else {
+            $error_message = "Error: " . $sql . "<br>" . $conn->error;
+        }
+    }
+}
+
+// Get membership plans for dropdown
+$membership_plans = $conn->query("SELECT * FROM membership_Plans");
+
+// Get members for dropdown
+$members = $conn->query("SELECT * FROM Members");
+
+// Get trainers for dropdown
+$trainers = $conn->query("SELECT * FROM Trainers");
+
+// Get stats for dashboard
+$total_members = $conn->query("SELECT COUNT(*) as count FROM Members")->fetch_assoc()['count'];
+$total_trainers = $conn->query("SELECT COUNT(*) as count FROM Trainers")->fetch_assoc()['count'];
+$total_payments = $conn->query("SELECT SUM(amount) as total FROM Payments")->fetch_assoc()['total'] ?: 0;
+$today_attendance = $conn->query("SELECT COUNT(*) as count FROM Attendance WHERE date = CURDATE() AND status = 'Present'")->fetch_assoc()['count'];
+?>
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gymora Gym Management</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" rel="stylesheet">
+    <style>
+        :root {
+    --primary: #1a1a1a;       /* Dark black for sidebar */
+    --secondary: #ff6600;     /* Orange for buttons and accents */
+    --accent: #ff4500;        /* Darker orange for hover states */
+    --light: #f5f5f5;         /* Light color for text on dark backgrounds */
+    --dark: #222222;          /* Near-black for text */
+    --success: #ff8533;       /* Light orange for success messages */
+    --warning: #ffcc00;       /* Yellow for warnings */
+}
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        body {
+            background-color: #f5f7fa;
+        }
+        
+        .container {
+            display: flex;
+            min-height: 100vh;
+        }
+        
+        .sidebar {
+            width: 250px;
+            background-color: var(--primary);
+            color: white;
+            padding: 20px 0;
+            transition: all 0.3s;
+        }
+        
+        .logo {
+            text-align: center;
+            padding: 20px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            margin-bottom: 20px;
+        }
+        
+        .logo h1 {
+            font-size: 24px;
+            font-weight: 700;
+            color: white;
+        }
+        
+        .logo span {
+            color: var(--secondary);
+        }
+        
+        .sidebar-menu {
+            list-style: none;
+        }
+        
+        .sidebar-menu li {
+            margin-bottom: 5px;
+        }
+        
+        .sidebar-menu a {
+            display: block;
+            color: rgba(255, 255, 255, 0.7);
+            padding: 12px 20px;
+            text-decoration: none;
+            transition: all 0.3s;
+            font-size: 15px;
+        }
+        
+        .sidebar-menu a:hover,
+        .sidebar-menu a.active {
+            background-color: var(--secondary);
+            color: white;
+            border-left: 4px solid white;
+        }
+        
+        .sidebar-menu i {
+            margin-right: 10px;
+            width: 20px;
+        }
+        
+        .main-content {
+            flex: 1;
+            padding: 30px;
+            overflow: auto;
+        }
+        
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+        }
+        
+        .header h2 {
+            color: var(--dark);
+            font-size: 24px;
+        }
+        
+        .header-btn {
+            background-color: var(--secondary);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .header-btn:hover {
+            background-color: var(--primary);
+        }
+        
+        .stats-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .stat-card {
+            background-color: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
+            transition: transform 0.3s;
+        }
+        
+        .stat-card:hover {
+            transform: translateY(-5px);
+        }
+        
+        .stat-card h3 {
+            font-size: 16px;
+            color: var(--dark);
+            margin-bottom: 10px;
+        }
+        
+        .stat-card .value {
+            font-size: 28px;
+            font-weight: 700;
+            color: var(--primary);
+        }
+        
+        .stat-card .icon {
+            float: right;
+            font-size: 40px;
+            opacity: 0.3;
+            color: var(--secondary);
+        }
+        
+        .content-box {
+            background-color: white;
+            border-radius: 10px;
+            padding: 25px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
+            margin-bottom: 30px;
+        }
+        
+        .content-box h3 {
+            color: var(--dark);
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .tabs {
+            display: flex;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .tab-btn {
+            background: none;
+            border: none;
+            padding: 10px 20px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 500;
+            color: var(--dark);
+            position: relative;
+        }
+        
+        .tab-btn:after {
+            content: '';
+            position: absolute;
+            width: 0;
+            height: 3px;
+            background-color: var(--secondary);
+            bottom: -1px;
+            left: 0;
+            transition: width 0.3s;
+        }
+        
+        .tab-btn.active {
+            color: var(--secondary);
+        }
+        
+        .tab-btn.active:after {
+            width: 100%;
+        }
+        
+        .tab-content {
+            display: none;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            color: var(--dark);
+        }
+        
+        .form-control {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 15px;
+            transition: border 0.3s;
+        }
+        
+        .form-control:focus {
+            border-color: var(--secondary);
+            outline: none;
+        }
+        
+        .btn {
+            background-color: var(--secondary);
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-size: 16px;
+        }
+        
+        .btn:hover {
+            background-color: var(--primary);
+        }
+        
+        .btn-danger {
+            background-color: var(--accent);
+        }
+        
+        .btn-success {
+            background-color: var(--success);
+        }
+        
+        .btn-warning {
+            background-color: var(--warning);
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        table th, table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #eee;
+        }
+        
+        table th {
+            background-color: #f9f9f9;
+            color: var(--dark);
+            font-weight: 600;
+        }
+        
+        .alert {
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 5px;
+        }
+        
+        .alert-success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .alert-danger {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        @media (max-width: 768px) {
+            .container {
+                flex-direction: column;
+            }
+            
+            .sidebar {
+                width: 100%;
+            }
+            
+            .stats-container {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <div class="logo">
+                <h1>Gym<span>ora</span></h1>
+            </div>
+            <ul class="sidebar-menu">
+                <li><a href="#" class="active" onclick="openTab(event, 'dashboard')"><i class="fas fa-tachometer-alt"></i> Dashboard</a></li>
+                <li><a href="#" onclick="openTab(event, 'members')"><i class="fas fa-users"></i> Members</a></li>
+                <li><a href="#" onclick="openTab(event, 'trainers')"><i class="fas fa-user-tie"></i> Trainers</a></li>
+                <li><a href="#" onclick="openTab(event, 'attendance')"><i class="fas fa-calendar-check"></i> Attendance</a></li>
+                <li><a href="#" onclick="openTab(event, 'payments')"><i class="fas fa-credit-card"></i> Payments</a></li>
+                <li><a href="#" onclick="openTab(event, 'assignments')"><i class="fas fa-tasks"></i> Assignments</a></li>
+            </ul>
+        </div>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <?php if(isset($success_message)): ?>
+                <div class="alert alert-success">
+                    <?php echo $success_message; ?>
+                </div>
+            <?php endif; ?>
+            
+            <?php if(isset($error_message)): ?>
+                <div class="alert alert-danger">
+                    <?php echo $error_message; ?>
+                </div>
+            <?php endif; ?>
+            
+            <!-- Dashboard -->
+            <div id="dashboard" class="tab-content active">
+                <div class="header">
+                    <h2>Dashboard</h2>
+                    <div>
+                        <button class="header-btn" onclick="openTab(event, 'members')">Add Member</button>
+                    </div>
+                </div>
+                
+                <div class="stats-container">
+                    <div class="stat-card">
+                        <i class="fas fa-users icon"></i>
+                        <h3>Total Members</h3>
+                        <div class="value"><?php echo $total_members; ?></div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <i class="fas fa-user-tie icon"></i>
+                        <h3>Total Trainers</h3>
+                        <div class="value"><?php echo $total_trainers; ?></div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <i class="fas fa-dollar-sign icon"></i>
+                        <h3>Total Revenue</h3>
+                        <div class="value">₹<?php echo number_format($total_payments, 2); ?></div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <i class="fas fa-calendar-check icon"></i>
+                        <h3>Today's Attendance</h3>
+                        <div class="value"><?php echo $today_attendance; ?></div>
+                    </div>
+                </div>
+                
+                <div class="content-box">
+                    <h3>Recent Members</h3>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Name</th>
+                                <th>Email</th>
+                                <th>Phone</th>
+                                <th>Join Date</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php
+                            $recent_members = $conn->query("SELECT * FROM Members ORDER BY join_date DESC LIMIT 5");
+                            while($row = $recent_members->fetch_assoc()) {
+                                echo "<tr>";
+                                echo "<td>".$row['member_id']."</td>";
+                                echo "<td>".$row['name']."</td>";
+                                echo "<td>".$row['email']."</td>";
+                                echo "<td>".$row['phone']."</td>";
+                                echo "<td>".$row['join_date']."</td>";
+                                echo "</tr>";
+                            }
+                            ?>
+                        </tbody>
+                    </table>
+                </div>
+                
+                <div class="content-box">
+                    <h3>Recent Payments</h3>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Member</th>
+                                <th>Amount</th>
+                                <th>Date</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php
+                            $recent_payments = $conn->query("SELECT p.payment_id, m.name, p.amount, p.payment_date FROM Payments p JOIN Members m ON p.member_id = m.member_id ORDER BY p.payment_date DESC LIMIT 5");
+                            while($row = $recent_payments->fetch_assoc()) {
+                                echo "<tr>";
+                                echo "<td>".$row['payment_id']."</td>";
+                                echo "<td>".$row['name']."</td>";
+                                echo "<td>₹".number_format($row['amount'], 2)."</td>";
+                                echo "<td>".$row['payment_date']."</td>";
+                                echo "</tr>";
+                            }
+                            ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            
+            <!-- Members Tab -->
+            <div id="members" class="tab-content">
+                <div class="header">
+                    <h2>Members Management</h2>
+                </div>
+                
+                <div class="content-box">
+                    <h3>Add New Member</h3>
+                    <form method="post" action="">
+                        <div class="form-group">
+                            <label for="name">Full Name</label>
+                            <input type="text" id="name" name="name" class="form-control" required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="email">Email Address</label>
+                            <input type="email" id="email" name="email" class="form-control" required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="phone">Phone Number</label>
+                            <input type="text" id="phone" name="phone" class="form-control" required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="gender">Gender</label>
+                            <select id="gender" name="gender" class="form-control" required>
+                                <option value="">Select Gender</option>
+                                <option value="Male">Male</option>
+                                <option value="Female">Female</option>
+                                <option value="Other">Other</option>
+                            </select>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="membership_id">Membership Plan</label>
+                            <select id="membership_id" name="membership_id" class="form-control" required>
+                                <option value="">Select Plan</option>
+                                <?php
+                                while($row = $membership_plans->fetch_assoc()) {
+                                    echo '<option value="'.$row['membership_id'].'">'.$row['plan_name'].' - ₹'.$row['price'].' ('.$row['duration_months'].' months)</option>';
+                                }
+                                ?>
+                            </select>
+                        </div>
+                        
+                        <button type="submit" name="add_member" class="btn">Add Member</button>
+                    </form>
+                </div>
+                
+                <div class="content-box">
+                    <h3>All Members</h3>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Name</th>
+                                <th>Email</th>
+                                <th>Phone</th>
+                                <th>Gender</th>
+                                <th>Join Date</th>
+                                <th>Membership</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php
+                            $all_members = $conn->query("SELECT m.*, mp.plan_name FROM Members m LEFT JOIN Membership_Plans mp ON m.membership_id = mp.membership_id ORDER BY m.join_date DESC");
+                            while($row = $all_members->fetch_assoc()) {
+                                echo "<tr>";
+                                echo "<td>".$row['member_id']."</td>";
+                                echo "<td>".$row['name']."</td>";
+                                echo "<td>".$row['email']."</td>";
+                                echo "<td>".$row['phone']."</td>";
+                                echo "<td>".$row['gender']."</td>";
+                                echo "<td>".$row['join_date']."</td>";
+                                echo "<td>".$row['plan_name']."</td>";
+                                echo "</tr>";
+                            }
+                            ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            
+            <!-- Trainers Tab -->
+            <div id="trainers" class="tab-content">
+                <div class="header">
+                    <h2>Trainers Management</h2>
+                </div>
+                
+                <div class="content-box">
+                    <h3>Add New Trainer</h3>
+                    <form method="post" action="">
+                        <div class="form-group">
+                            <label for="trainer_name">Full Name</label>
+                            <input type="text" id="trainer_name" name="trainer_name" class="form-control" required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="specialization">Specialization</label>
+                            <input type="text" id="specialization" name="specialization" class="form-control" required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="trainer_phone">Phone Number</label>
+                            <input type="text" id="trainer_phone" name="trainer_phone" class="form-control" required>
+                        </div>
+                        
+                        <button type="submit" name="add_trainer" class="btn">Add Trainer</button>
+                    </form>
+                </div>
+                
+                <div class="content-box">
+                    <h3>All Trainers</h3>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Name</th>
+                                <th>Specialization</th>
+                                <th>Phone</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php
+                            $all_trainers = $conn->query("SELECT * FROM Trainers");
+                            while($row = $all_trainers->fetch_assoc()) {
+                                echo "<tr>";
+                                echo "<td>".$row['trainer_id']."</td>";
+                                echo "<td>".$row['name']."</td>";
+                                echo "<td>".$row['specialization']."</td>";
+                                echo "<td>".$row['phone']."</td>";
+                                echo "</tr>";
+                            }
+                            ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            
+            <!-- Attendance Tab -->
+            <div id="attendance" class="tab-content">
+                <div class="header">
+                    <h2>Attendance Management</h2>
+                </div>
+                
+                <div class="content-box">
+                    <h3>Record Attendance</h3>
+                    <form method="post" action="">
+                        <div class="form-group">
+                            <label for="attendance_member_id">Select Member</label>
+                            <select id="attendance_member_id" name="attendance_member_id" class="form-control" required>
+                                <option value="">Select Member</option>
+                                <?php
+                                $members->data_seek(0);
+                                while($row = $members->fetch_assoc()) {
+                                    echo '<option value="'.$row['member_id'].'">'.$row['name'].' (ID: '.$row['member_id'].')</option>';
+                                }
+                                ?>
+                            </select>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="status">Status</label>
+                            <select id="status" name="status" class="form-control" required>
+                                <option value="Present">Present</option>
+                                <option value="Absent">Absent</option>
+                            </select>
+                        </div>
+                        
+                        <button type="submit" name="record_attendance" class="btn">Record Attendance</button>
+                    </form>
+                </div>
+                
+                <div class="content-box">
+                    <h3>Recent Attendance Records</h3>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Member Name</th>
+                                <th>Date</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php
+                            $attendance_records = $conn->query("SELECT a.*, m.name FROM Attendance a JOIN Members m ON a.member_id = m.member_id ORDER BY a.date DESC LIMIT 10");
+                            while($row = $attendance_records->fetch_assoc()) {
+                                echo "<tr>";
+                                echo "<td>".$row['attendance_id']."</td>";
+                                echo "<td>".$row['name']."</td>";
+                                echo "<td>".$row['date']."</td>";
+                                echo "<td>".$row['status']."</td>";
+                                echo "</tr>";
+                            }
+                            ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            
+            <!-- Payments Tab -->
+            <div id="payments" class="tab-content">
+                <div class="header">
+                    <h2>Payment Management</h2>
+                </div>
+                
+                <div class="content-box">
+                    <h3>Record Payment</h3>
+                    <form method="post" action="">
+                        <div class="form-group">
+                            <label for="payment_member_id">Select Member</label>
+                            <select id="payment_member_id" name="payment_member_id" class="form-control" required>
+                                <option value="">Select Member</option>
+                                <?php
+                                $members->data_seek(0);
+                                while($row = $members->fetch_assoc()) {
+                                    echo '<option value="'.$row['member_id'].'">'.$row['name'].' (ID: '.$row['member_id'].')</option>';
+                                }
+                                ?>
+                            </select>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="payment_membership_id">Membership Plan</label>
+                            <select id="payment_membership_id" name="payment_membership_id" class="form-control" required>
+                                <option value="">Select Plan</option>
+                                <?php
+                                $membership_plans->data_seek(0);
+                                while($row = $membership_plans->fetch_assoc()) {
+                                    echo '<option value="'.$row['membership_id'].'">'.$row['plan_name'].' - ₹'.$row['price'].' ('.$row['duration_months'].' months)</option>';
+                                }
+                                ?>
+                            </select>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="amount">Amount</label>
+                            <input type="number" step="0.01" id="amount" name="amount" class="form-control" required>
+                        </div>
+                        
+                        <button type="submit" name="record_payment" class="btn">Record Payment</button>
+                    </form>
+                </div>
+                
+                <div class="content-box">
+                    <h3>Recent Payments</h3>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Member</th>
+                                <th>Plan</th>
+                                <th>Amount</th>
+                                <th>Date</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php
+                            $all_payments = $conn->query("SELECT p.*, m.name as member_name, mp.plan_name FROM Payments p JOIN Members m ON p.member_id = m.member_id JOIN Membership_Plans mp ON p.membership_id = mp.membership_id ORDER BY p.payment_date DESC");
+                            while($row = $all_payments->fetch_assoc()) {
+                                echo "<tr>";
+                                echo "<td>".$row['payment_id']."</td>";
+                                echo "<td>".$row['member_name']."</td>";
+                                echo "<td>".$row['plan_name']."</td>";
+                                echo "<td>₹".number_format($row['amount'], 2)."</td>";
+                                echo "<td>".$row['payment_date']."</td>";
+                                echo "</tr>";
+                            }
+                            ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            
+            <!-- Assignments Tab -->
+            <div id="assignments" class="tab-content">
+                <div class="header">
+                    <h2>Trainer Assignments</h2>
+                </div>
+                
+                <div class="content-box">
+                    <h3>Assign Trainer to Member</h3>
+                    <form method="post" action="">
+                        <div class="form-group">
+                            <label for="assign_member_id">Select Member</label>
+			    <select id="assign_member_id" name="assign_member_id" class="form-control" required>
+                                <option value="">Select Member</option>
+                                <?php
+                                $members->data_seek(0);
+                                while($row = $members->fetch_assoc()) {
+                                    echo '<option value="'.$row['member_id'].'">'.$row['name'].' (ID: '.$row['member_id'].')</option>';
+                                }
+                                ?>
+                            </select>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="assign_trainer_id">Select Trainer</label>
+                            <select id="assign_trainer_id" name="assign_trainer_id" class="form-control" required>
+                                <option value="">Select Trainer</option>
+                                <?php
+                                $trainers->data_seek(0);
+                                while($row = $trainers->fetch_assoc()) {
+                                    echo '<option value="'.$row['trainer_id'].'">'.$row['name'].' - '.$row['specialization'].'</option>';
+                                }
+                                ?>
+                            </select>
+                        </div>
+                        
+                        <button type="submit" name="assign_trainer" class="btn">Assign Trainer</button>
+                    </form>
+                </div>
+                
+                <div class="content-box">
+                    <h3>Current Assignments</h3>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Member</th>
+                                <th>Trainer</th>
+                                <th>Assigned Date</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php
+                            $assignments = $conn->query("SELECT mt.*, m.name as member_name, t.name as trainer_name 
+                                                        FROM Member_Trainer mt 
+                                                        JOIN Members m ON mt.member_id = m.member_id 
+                                                        JOIN Trainers t ON mt.trainer_id = t.trainer_id 
+                                                        ORDER BY mt.assigned_date DESC");
+                            while($row = $assignments->fetch_assoc()) {
+                                echo "<tr>";
+                                echo "<td>".$row['id']."</td>";
+                                echo "<td>".$row['member_name']."</td>";
+                                echo "<td>".$row['trainer_name']."</td>";
+                                echo "<td>".$row['assigned_date']."</td>";
+                                echo "</tr>";
+                            }
+                            ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            
+            <!-- Membership Plans Tab -->
+            <div id="membership-plans" class="tab-content">
+                <div class="header">
+                    <h2>Membership Plans</h2>
+                </div>
+                
+                <div class="content-box">
+                    <h3>Add New Plan</h3>
+                    <form method="post" action="">
+                        <div class="form-group">
+                            <label for="plan_name">Plan Name</label>
+                            <input type="text" id="plan_name" name="plan_name" class="form-control" required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="duration_months">Duration (months)</label>
+                            <input type="number" id="duration_months" name="duration_months" class="form-control" required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="price">Price (₹)</label>
+                            <input type="number" step="0.01" id="price" name="price" class="form-control" required>
+                        </div>
+                        
+                        <button type="submit" name="add_plan" class="btn">Add Plan</button>
+                    </form>
+                </div>
+                
+                <div class="content-box">
+                    <h3>All Plans</h3>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Plan Name</th>
+                                <th>Duration (months)</th>
+                                <th>Price</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php
+                            $membership_plans->data_seek(0);
+                            while($row = $membership_plans->fetch_assoc()) {
+                                echo "<tr>";
+                                echo "<td>".$row['membership_id']."</td>";
+                                echo "<td>".$row['plan_name']."</td>";
+                                echo "<td>".$row['duration_months']."</td>";
+                                echo "<td>₹".number_format($row['price'], 2)."</td>";
+                                echo "</tr>";
+                            }
+                            ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            
+            <!-- Reports Tab -->
+            <div id="reports" class="tab-content">
+                <div class="header">
+                    <h2>Reports</h2>
+                </div>
+                
+                <div class="stats-container">
+                    <div class="stat-card">
+                        <i class="fas fa-users icon"></i>
+                        <h3>Active Members</h3>
+                        <div class="value"><?php echo $total_members; ?></div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <i class="fas fa-dollar-sign icon"></i>
+                        <h3>Monthly Revenue</h3>
+                        <?php
+                        $monthly_revenue = $conn->query("SELECT SUM(amount) as total FROM Payments WHERE MONTH(payment_date) = MONTH(CURRENT_DATE()) AND YEAR(payment_date) = YEAR(CURRENT_DATE())")->fetch_assoc()['total'] ?: 0;
+                        ?>
+                        <div class="value">₹<?php echo number_format($monthly_revenue, 2); ?></div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <i class="fas fa-calendar-check icon"></i>
+                        <h3>Attendance Rate</h3>
+                        <?php
+                        $attendance_rate = $conn->query("SELECT (COUNT() * 100 / (SELECT COUNT() FROM Members)) as rate FROM Attendance WHERE status = 'Present' AND date = CURRENT_DATE()")->fetch_assoc()['rate'] ?: 0;
+                        ?>
+                        <div class="value"><?php echo round($attendance_rate); ?>%</div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <i class="fas fa-user-tie icon"></i>
+                        <h3>Trainer Utilization</h3>
+                        <?php
+                        $trainer_count = $total_trainers ?: 1;  // Avoid division by zero
+                        $assigned_trainers = $conn->query("SELECT COUNT(DISTINCT trainer_id) as count FROM Member_Trainer")->fetch_assoc()['count'] ?: 0;
+                        $trainer_utilization = ($assigned_trainers / $trainer_count) * 100;
+                        ?>
+                        <div class="value"><?php echo round($trainer_utilization); ?>%</div>
+                    </div>
+                </div>
+                
+                <div class="content-box">
+                    <h3>Membership Distribution</h3>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Plan Name</th>
+                                <th>Number of Members</th>
+                                <th>Revenue</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php
+                            $plan_distribution = $conn->query("SELECT mp.plan_name, COUNT(m.member_id) as member_count, SUM(mp.price) as revenue
+                                                            FROM Membership_Plans mp
+                                                            LEFT JOIN Members m ON mp.membership_id = m.membership_id
+                                                            GROUP BY mp.membership_id
+                                                            ORDER BY member_count DESC");
+                            while($row = $plan_distribution->fetch_assoc()) {
+                                echo "<tr>";
+                                echo "<td>".$row['plan_name']."</td>";
+                                echo "<td>".$row['member_count']."</td>";
+                                echo "<td>₹".number_format($row['revenue'], 2)."</td>";
+                                echo "</tr>";
+                            }
+                            ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Tab switching functionality
+        function openTab(evt, tabName) {
+            // Hide all tab content
+            var tabcontent = document.getElementsByClassName("tab-content");
+            for (var i = 0; i < tabcontent.length; i++) {
+                tabcontent[i].classList.remove("active");
+            }
+            
+            // Remove active class from all tab buttons
+            var tablinks = document.getElementsByClassName("sidebar-menu")[0].getElementsByTagName("a");
+            for (var i = 0; i < tablinks.length; i++) {
+                tablinks[i].classList.remove("active");
+            }
+            
+            // Show the selected tab content and add active class to the button
+            document.getElementById(tabName).classList.add("active");
+            evt.currentTarget.classList.add("active");
+        }
+        
+        // Add event listener to form selects that should auto-fill other fields
+        document.addEventListener('DOMContentLoaded', function() {
+            // Auto-fill payment amount based on membership plan selection
+            var paymentMembershipSelect = document.getElementById('payment_membership_id');
+            var amountInput = document.getElementById('amount');
+            
+            if (paymentMembershipSelect && amountInput) {
+                paymentMembershipSelect.addEventListener('change', function() {
+                    var selectedOption = this.options[this.selectedIndex];
+                    if (selectedOption.value) {
+                        var planText = selectedOption.text;
+                        var priceMatch = planText.match(/\$([0-9,.]+)/);
+                        if (priceMatch && priceMatch[1]) {
+                            amountInput.value = priceMatch[1].replace(',', '');
+                        }
+                    }
+                });
+            }
+            
+            // Add alerts auto-dismiss after 5 seconds
+            var alerts = document.getElementsByClassName('alert');
+            if (alerts.length > 0) {
+                setTimeout(function() {
+                    for (var i = 0; i < alerts.length; i++) {
+                        alerts[i].style.display = 'none';
+                    }
+                }, 5000);
+            }
+        });
+        
+        // Add member form validation
+        var addMemberForm = document.querySelector('form[name="add_member"]');
+        if (addMemberForm) {
+            addMemberForm.addEventListener('submit', function(e) {
+                var emailInput = document.getElementById('email');
+                var phoneInput = document.getElementById('phone');
+                
+                // Simple email validation
+                var emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                if (!emailPattern.test(emailInput.value)) {
+                    alert('Please enter a valid email address');
+                    e.preventDefault();
+                    return false;
+                }
+                
+                // Simple phone validation
+                var phonePattern = /^\d{10,15}$/;
+                if (!phonePattern.test(phoneInput.value.replace(/[- ()]/g, ''))) {
+                    alert('Please enter a valid phone number');
+                    e.preventDefault();
+                    return false;
+                }
+            });
+        }
+        
+        // Initialize dashboard as the default tab
+        document.addEventListener('DOMContentLoaded', function() {
+            // Check if any tab is forced to be shown due to form submission
+            var activeTab = document.querySelector('.tab-content.active');
+            if (!activeTab) {
+                document.getElementById('dashboard').classList.add('active');
+                document.querySelector('.sidebar-menu a').classList.add('active');
+            }
+        });
+    </script>
+</body>
+</html>
+
+<?php
+// Close the database connection
+$conn->close();
+?>
